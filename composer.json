@@ -1,6 +1,7 @@
 {
     "name": "gabrielecorio/fiscozen-wrapper",
     "description": "Un wrapper elegante per l'API Fiscozen",
+    "license": "MIT",
     "autoload": {
         "psr-4": {
             "GabrieleCorio\\FiscozenWrapper\\": "src/"
