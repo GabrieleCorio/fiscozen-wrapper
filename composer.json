@@ -1,0 +1,21 @@
+{
+    "name": "gabrielecorio/fiscozen-wrapper",
+    "description": "Un wrapper elegante per l'API Fiscozen",
+    "autoload": {
+        "psr-4": {
+            "GabrieleCorio\\FiscozenWrapper\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "GabrieleCorio\\FiscozenWrapper\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": ">=8.1",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    }
+}

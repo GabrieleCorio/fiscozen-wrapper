@@ -1,0 +1,9 @@
+# Ignore dependencies
+vendor/
+
+# Ignore cache files
+*.cache
+
+# Ignore sessions
+sessions/*
+!sessions/.gitkeep
