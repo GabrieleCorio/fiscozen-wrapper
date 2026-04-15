@@ -37,7 +37,32 @@ class FiscozenClient
     // -------------------------------------------------------------------------
 
     /**
-     * Autentica il client. Se la sessione è già valida non fa nulla.
+     * Step 1/2: invia le credenziali e avvia il flusso OTP.
+     * I cookie di sessione vengono persistiti su disco; chiamare submitOtp() per completare
+     * l'autenticazione, anche in una esecuzione HTTP successiva.
+     *
+     * @return string Numero di telefono mascherato su cui è stato inviato l'OTP.
+     * @throws AuthenticationException
+     */
+    public function startLogin(): string
+    {
+        return $this->auth->startLogin($this->email, $this->password);
+    }
+
+    /**
+     * Step 3: verifica il codice OTP e completa l'autenticazione.
+     * Deve essere chiamato dopo startLogin(), anche in una esecuzione separata.
+     *
+     * @throws AuthenticationException
+     */
+    public function submitOtp(string $otp): void
+    {
+        $this->auth->submitOtp($otp);
+    }
+
+    /**
+     * Login completo in un'unica chiamata sincrona (utile per CLI/test).
+     * Se la sessione è già valida non fa nulla.
      *
      * @param  callable(string $phoneNumber): string $otpCallback
      * @throws AuthenticationException

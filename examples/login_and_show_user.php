@@ -16,30 +16,55 @@ $email      = 'la-tua-email@example.com';
 $password   = 'la-tua-password';
 $sessionDir = __DIR__ . '/../sessions';
 
-// ---------------------------------------------------------------------------
-// Autenticazione
-// ---------------------------------------------------------------------------
-
 $client = new FiscozenClient(
     email: $email,
     password: $password,
     sessionDir: $sessionDir,
 );
 
+// ---------------------------------------------------------------------------
+// Autenticazione in due step separati
+//
+// Questo esempio mostra il flusso pensato per applicazioni web, dove l'invio
+// delle credenziali e l'inserimento dell'OTP avvengono in request HTTP separate.
+//
+// Per un contesto CLI/test è possibile usare il metodo sincrono:
+//
+//   $client->login(function (string $phone): string {
+//       echo "OTP inviato a {$phone}: ";
+//       return trim(fgets(STDIN));
+//   });
+// ---------------------------------------------------------------------------
+
 echo "Controllo sessione...\n";
 
-try {
-    $client->login(function (string $phoneNumber): string {
-        echo "OTP richiesto al numero: {$phoneNumber}\n";
-        echo "Inserisci il codice OTP: ";
-        return trim(fgets(STDIN));
-    });
-} catch (AuthenticationException $e) {
-    echo "Errore di autenticazione: {$e->getMessage()}\n";
-    exit(1);
-}
+if ($client->isAuthenticated()) {
+    echo "Sessione già attiva, skip del login.\n\n";
+} else {
+    // Step 1: invia le credenziali — i cookie intermedi vengono persistiti su disco.
+    try {
+        $phoneNumber = $client->startLogin();
+        echo "OTP inviato al numero: {$phoneNumber}\n";
+    } catch (AuthenticationException $e) {
+        echo "Errore di autenticazione: {$e->getMessage()}\n";
+        exit(1);
+    }
 
-echo "Autenticato con successo.\n\n";
+    // In una web app qui finisce la prima request e inizia la seconda.
+    // In questo script CLI chiediamo subito l'OTP da terminale.
+    echo "Inserisci il codice OTP: ";
+    $otp = trim(fgets(STDIN));
+
+    // Step 2: verifica l'OTP e completa l'autenticazione.
+    try {
+        $client->submitOtp($otp);
+    } catch (AuthenticationException $e) {
+        echo "Errore di autenticazione: {$e->getMessage()}\n";
+        exit(1);
+    }
+
+    echo "Autenticato con successo.\n\n";
+}
 
 // ---------------------------------------------------------------------------
 // Recupero e stampa dati utente

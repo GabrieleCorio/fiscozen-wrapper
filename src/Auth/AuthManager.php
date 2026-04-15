@@ -52,10 +52,35 @@ class AuthManager
     }
 
     /**
-     * Esegue il login completo con il flusso a 3 step:
-     *   1. Inizializzazione sessione (ottiene CSRF)
-     *   2. Invio credenziali (riceve richiesta OTP)
-     *   3. Verifica OTP + trust dispositivo
+     * Step 1/2 del flusso di autenticazione: inizializza la sessione e invia le credenziali.
+     * I cookie intermedi (CSRF token, session ID) vengono persistiti su disco così che
+     * submitOtp() possa essere chiamato in una esecuzione successiva.
+     *
+     * @return string Numero di telefono mascherato su cui è stato inviato l'OTP.
+     * @throws AuthenticationException
+     */
+    public function startLogin(string $email, string $password): string
+    {
+        $this->initSession();
+        return $this->login($email, $password);
+    }
+
+    /**
+     * Step 3 del flusso di autenticazione: verifica il codice OTP e marca il dispositivo
+     * come trusted. Deve essere chiamato dopo startLogin(), anche in una esecuzione separata,
+     * purché il cookie file sia lo stesso.
+     *
+     * @throws AuthenticationException
+     */
+    public function submitOtp(string $otp): void
+    {
+        $this->verifyOtp($otp);
+        $this->trustDevice();
+    }
+
+    /**
+     * Esegue il login completo in un'unica chiamata sincrona tramite callback.
+     * Utile per contesti CLI o test; per applicazioni web preferire startLogin() + submitOtp().
      *
      * Se la sessione è già valida non fa nulla.
      *
@@ -69,11 +94,8 @@ class AuthManager
             return;
         }
 
-        $this->initSession();
-        $phoneNumber = $this->login($email, $password);
-        $otp = $otpCallback($phoneNumber);
-        $this->verifyOtp($otp);
-        $this->trustDevice();
+        $phoneNumber = $this->startLogin($email, $password);
+        $this->submitOtp($otpCallback($phoneNumber));
     }
 
     /**

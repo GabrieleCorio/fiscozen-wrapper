@@ -135,6 +135,75 @@ class AuthManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // startLogin() + submitOtp() — flusso in due step separati
+    // -------------------------------------------------------------------------
+
+    public function testStartLoginReturnsPhoneNumber(): void
+    {
+        $manager = $this->makeManager([
+            $this->initSessionOk(),
+            $this->loginOtpRequired('+39 333 9999999'),
+        ]);
+
+        $phone = $manager->startLogin('user@example.com', 'secret');
+
+        self::assertSame('+39 333 9999999', $phone);
+    }
+
+    public function testStartLoginThrowsOnInvalidCredentials(): void
+    {
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessageMatches('/Login fallito/');
+
+        $manager = $this->makeManager([
+            $this->initSessionOk(),
+            new Response(403, [], json_encode(['detail' => 'Forbidden'])),
+        ]);
+
+        $manager->startLogin('user@example.com', 'wrong_password');
+    }
+
+    public function testSubmitOtpCompletesAuthentication(): void
+    {
+        $manager = $this->makeManager([
+            $this->otpVerifyOk(),
+            $this->trustOk(),
+        ]);
+
+        // Non deve lanciare eccezioni
+        $manager->submitOtp('654321');
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testSubmitOtpThrowsOnWrongCode(): void
+    {
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessageMatches('/OTP/');
+
+        $manager = $this->makeManager([
+            new Response(401, [], json_encode(['detail' => 'Invalid OTP'])),
+        ]);
+
+        $manager->submitOtp('000000');
+    }
+
+    public function testStartLoginAndSubmitOtpTogetherRunFullFlow(): void
+    {
+        $manager = $this->makeManager([
+            $this->initSessionOk(),
+            $this->loginOtpRequired('+39 333 1111111'),
+            $this->otpVerifyOk(),
+            $this->trustOk(),
+        ]);
+
+        $phone = $manager->startLogin('user@example.com', 'secret');
+        $manager->submitOtp('123456');
+
+        self::assertSame('+39 333 1111111', $phone);
+    }
+
+    // -------------------------------------------------------------------------
     // authenticate() — sessione già valida
     // -------------------------------------------------------------------------
 
