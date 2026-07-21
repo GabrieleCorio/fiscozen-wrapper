@@ -150,6 +150,23 @@ class AuthManagerTest extends TestCase
         self::assertSame('+39 333 9999999', $phone);
     }
 
+    public function testStartLoginPersistsSessionWithRestrictedPermissions(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('I permessi POSIX non sono disponibili su Windows');
+        }
+
+        $manager = $this->makeManager([
+            $this->initSessionOk(),
+            $this->loginOtpRequired(),
+        ]);
+
+        $manager->startLogin('user@example.invalid', 'not-a-real-password');
+
+        self::assertFileExists($this->cookieFile);
+        self::assertSame(0600, fileperms($this->cookieFile) & 0777);
+    }
+
     public function testStartLoginThrowsOnInvalidCredentials(): void
     {
         $this->expectException(AuthenticationException::class);

@@ -1,9 +1,18 @@
-# Ignore dependencies
+# Ignore dependencies
 vendor/
 
 # Ignore cache files
 *.cache
+.DS_Store
 
-# Ignore sessions
+# Ignore local configuration and captured traffic
+.env
+.env.*
+!.env.example
+*.har
+
+# Ignore sessions and local data exports
 sessions/*
 !sessions/.gitkeep
+exports/
+*.local.json

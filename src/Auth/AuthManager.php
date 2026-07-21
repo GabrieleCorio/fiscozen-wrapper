@@ -26,6 +26,7 @@ class AuthManager
         private readonly ?\Closure $httpClientFactory = null,
     ) {
         $this->cookieJar  = new FileCookieJar($this->cookieFile, storeSessionCookies: true);
+        $this->secureCookieFilePermissions();
         $this->httpClient = $this->buildHttpClient();
     }
 
@@ -62,7 +63,10 @@ class AuthManager
     public function startLogin(string $email, string $password): string
     {
         $this->initSession();
-        return $this->login($email, $password);
+        $phoneNumber = $this->login($email, $password);
+        $this->persistCookies();
+
+        return $phoneNumber;
     }
 
     /**
@@ -76,6 +80,7 @@ class AuthManager
     {
         $this->verifyOtp($otp);
         $this->trustDevice();
+        $this->persistCookies();
     }
 
     /**
@@ -279,6 +284,25 @@ class AuthManager
         }
 
         return null;
+    }
+
+    /**
+     * Salva esplicitamente la sessione e limita il file al solo utente corrente.
+     */
+    private function persistCookies(): void
+    {
+        $this->cookieJar->save($this->cookieFile);
+        $this->secureCookieFilePermissions();
+    }
+
+    /**
+     * Imposta permessi restrittivi sui cookie già presenti senza crearne di nuovi.
+     */
+    private function secureCookieFilePermissions(): void
+    {
+        if (file_exists($this->cookieFile) && !chmod($this->cookieFile, 0600)) {
+            throw new \RuntimeException('Impossibile proteggere il file di sessione');
+        }
     }
 
     /**
