@@ -38,6 +38,48 @@ class ApiClient
         return $this->get('/api/v1/users/self/');
     }
 
+    /** @param array<string, int|string|null> $query @return array<mixed> @throws ApiException */
+    public function getInvoices(array $query): array
+    {
+        return $this->get('/api/v1/invoices/', $query);
+    }
+
+    /** @param array<string, string|null> $query @return array<mixed> @throws ApiException */
+    public function getInvoiceFormatInfo(array $query): array
+    {
+        return $this->get('/api/v1/invoices/invoice_format_info/', $query);
+    }
+
+    /** @param array<string, string|null> $query @return array<mixed> @throws ApiException */
+    public function getCounterparts(array $query): array
+    {
+        return $this->get('/api/v1/counterparts/', $query);
+    }
+
+    /** @param array<string, int|string|null> $query @return array<mixed> @throws ApiException */
+    public function getPaymentMethods(array $query): array
+    {
+        return $this->get('/api/v1/payment_methods/', $query);
+    }
+
+    /** @return array<mixed> @throws ApiException */
+    public function getRealtimeYearStats(int $fiscalYear): array
+    {
+        return $this->get('/api/v1/fiscal_profile/realtime_year_stats/', ['fiscal_year' => $fiscalYear]);
+    }
+
+    /** @return array<mixed> @throws ApiException */
+    public function getFulfillmentForecast(int $fiscalYear): array
+    {
+        return $this->get('/api/v1/fiscal_profile/fulfillment_forecast/', ['fiscal_year' => $fiscalYear]);
+    }
+
+    /** @return array<mixed> @throws ApiException */
+    public function getDashboardTasks(): array
+    {
+        return $this->get('/customer-push/api/v1/dashboard-tasks/');
+    }
+
     // -------------------------------------------------------------------------
     // HTTP internals
     // -------------------------------------------------------------------------
@@ -46,11 +88,12 @@ class ApiClient
      * @return array<mixed>
      * @throws ApiException
      */
-    private function get(string $path): array
+    private function get(string $path, array $query = []): array
     {
         try {
             $response = $this->buildClient()->get($path, [
                 'headers'     => $this->buildHeaders(),
+                'query'       => array_filter($query, static fn(mixed $value): bool => $value !== null),
                 'http_errors' => false,
             ]);
         } catch (GuzzleException $e) {
@@ -68,7 +111,7 @@ class ApiClient
     {
         $body = json_decode((string) $response->getBody(), true) ?? [];
 
-        if ($response->getStatusCode() !== 200) {
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
             $detail = $body['detail'] ?? $body['message'] ?? 'Errore sconosciuto';
             throw new ApiException(
                 "HTTP {$response->getStatusCode()}: {$detail}",

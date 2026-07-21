@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace GabrieleCorio\FiscozenWrapper;
 
 use GabrieleCorio\FiscozenWrapper\Api\ApiClient;
+use GabrieleCorio\FiscozenWrapper\Api\Domain\CounterpartsApi;
+use GabrieleCorio\FiscozenWrapper\Api\Domain\DashboardApi;
+use GabrieleCorio\FiscozenWrapper\Api\Domain\InvoicesApi;
+use GabrieleCorio\FiscozenWrapper\Api\Domain\PaymentsApi;
 use GabrieleCorio\FiscozenWrapper\Auth\AuthManager;
 use GabrieleCorio\FiscozenWrapper\Exceptions\ApiException;
 use GabrieleCorio\FiscozenWrapper\Exceptions\AuthenticationException;
@@ -13,6 +17,10 @@ class FiscozenClient
 {
     private AuthManager $auth;
     private ApiClient $api;
+    private InvoicesApi $invoicesApi;
+    private CounterpartsApi $counterpartsApi;
+    private PaymentsApi $paymentsApi;
+    private DashboardApi $dashboardApi;
 
     /**
      * @param  string|null       $sessionDir  Directory dove salvare i file di sessione.
@@ -30,6 +38,10 @@ class FiscozenClient
         $cookieFile    = $this->resolveCookieFile($sessionDir);
         $this->auth    = $auth ?? new AuthManager($cookieFile);
         $this->api     = $api  ?? new ApiClient($this->auth);
+        $this->invoicesApi = new InvoicesApi($this->api);
+        $this->counterpartsApi = new CounterpartsApi($this->api);
+        $this->paymentsApi = new PaymentsApi($this->api);
+        $this->dashboardApi = new DashboardApi($this->api);
     }
 
     // -------------------------------------------------------------------------
@@ -108,6 +120,30 @@ class FiscozenClient
         return $this->api->getUserMe();
     }
 
+    /** Restituisce gli endpoint GET relativi alle fatture. */
+    public function invoices(): InvoicesApi
+    {
+        return $this->invoicesApi;
+    }
+
+    /** Restituisce gli endpoint GET relativi alle controparti. */
+    public function counterparts(): CounterpartsApi
+    {
+        return $this->counterpartsApi;
+    }
+
+    /** Restituisce gli endpoint GET relativi ai pagamenti. */
+    public function payments(): PaymentsApi
+    {
+        return $this->paymentsApi;
+    }
+
+    /** Restituisce gli endpoint GET relativi alla dashboard. */
+    public function dashboard(): DashboardApi
+    {
+        return $this->dashboardApi;
+    }
+
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
@@ -126,8 +162,12 @@ class FiscozenClient
     {
         $dir = $sessionDir ?? sys_get_temp_dir() . '/fiscozen_sessions';
 
-        if (!is_dir($dir)) {
-            mkdir($dir, 0700, recursive: true);
+        if (!is_dir($dir) && !mkdir($dir, 0700, recursive: true) && !is_dir($dir)) {
+            throw new \RuntimeException('Impossibile creare la directory delle sessioni');
+        }
+
+        if (!chmod($dir, 0700)) {
+            throw new \RuntimeException('Impossibile proteggere la directory delle sessioni');
         }
 
         return $dir . '/' . hash('sha256', $this->email) . '.json';
