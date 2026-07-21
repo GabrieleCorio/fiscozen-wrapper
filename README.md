@@ -77,9 +77,117 @@ $client->relogin($callback); // destroys the existing session and authenticates 
 
 ## Available API methods
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `getUserMe()` | `array` | Returns the authenticated user's profile data |
+The read-only endpoints are grouped by domain. They reuse the authenticated session and
+CSRF handling provided by `AuthManager`.
+
+| Domain | Method | Returns | Description |
+|--------|--------|---------|-------------|
+| User | `getUserMe()` | `array` | Authenticated user's profile data |
+| Invoices | `invoices()->list(...)` | `PaginatedResponse` | Paginated invoice list |
+| Invoices | `invoices()->getFormatInfo(...)` | `array` | Invoice format information for a date |
+| Counterparts | `counterparts()->list(...)` | `array` | Counterpart list |
+| Payments | `payments()->listMethods(...)` | `PaginatedResponse` | Paginated payment method list |
+| Dashboard | `dashboard()->getRealtimeYearStats(...)` | `array` | Real-time fiscal-year statistics |
+| Dashboard | `dashboard()->getFulfillmentForecast(...)` | `array` | Fiscal-year fulfillment forecast |
+| Dashboard | `dashboard()->getTasks()` | `array` | Dashboard tasks |
+
+Only GET endpoints observed in captured application traffic are included. No write endpoint
+is exposed.
+
+### Invoices
+
+```php
+$invoices = $client->invoices()->list(
+    page: 1,
+    pageSize: 20,
+    selfInvoice: false,
+);
+
+foreach ($invoices->results as $invoice) {
+    // Read the fields needed by your application.
+}
+
+$formatInfo = $client->invoices()->getFormatInfo(
+    new DateTimeImmutable('2026-01-15'),
+);
+```
+
+### Counterparts
+
+```php
+$counterparts = $client->counterparts()->list();
+```
+
+The optional `choices` and `counterpartType` filters are strings because the captured traffic
+does not establish a stable set of allowed enum values.
+
+### Payment methods
+
+```php
+$paymentMethods = $client->payments()->listMethods(
+    page: 1,
+    pageSize: 20,
+);
+```
+
+### Dashboard
+
+```php
+$year = 2026;
+
+$stats = $client->dashboard()->getRealtimeYearStats($year);
+$forecast = $client->dashboard()->getFulfillmentForecast($year);
+$tasks = $client->dashboard()->getTasks();
+```
+
+### Pagination
+
+Paginated methods return a `PaginatedResponse` with the fields observed in the API response:
+
+```php
+$page = $client->invoices()->list(page: 1, pageSize: 20);
+
+echo $page->count;
+echo $page->page;
+echo $page->pages;
+
+if ($page->next !== null) {
+    // Request the next page explicitly using page: $page->page + 1.
+}
+```
+
+Pagination parameters must be greater than or equal to `1`. Unknown filters are deliberately
+not accepted.
+
+### Local read-only JSON command
+
+The local command prints JSON to standard output and never saves API responses automatically:
+
+```bash
+php examples/read_data.php dashboard --year=2026
+php examples/read_data.php invoices --page=1 --page-size=20
+php examples/read_data.php counterparts
+php examples/read_data.php payment-methods --page=1 --page-size=20
+```
+
+Provide credentials through environment variables. To avoid placing their values in shell
+history, enter them interactively:
+
+```bash
+read -r FISCOZEN_EMAIL
+read -rs FISCOZEN_PASSWORD
+export FISCOZEN_EMAIL FISCOZEN_PASSWORD
+```
+
+The first execution may request the OTP interactively. Session cookies are stored in the
+git-ignored `sessions/` directory by default. Set `FISCOZEN_SESSION_DIR` to use another private
+directory.
+
+API responses can contain personal or fiscal data. Review terminal and process access before
+running the command, and do not redirect output to a file unless that file is protected and
+excluded from version control.
+
+### User profile
 
 ```php
 use GabrieleCorio\FiscozenWrapper\Exceptions\ApiException;
