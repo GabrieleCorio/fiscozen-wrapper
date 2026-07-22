@@ -291,7 +291,15 @@ class AuthManager
      */
     private function persistCookies(): void
     {
-        $this->cookieJar->save($this->cookieFile);
+        // umask ristrittivo per evitare che, alla creazione, il file sia
+        // brevemente leggibile da altri utenti prima del chmod successivo.
+        $previousUmask = umask(0077);
+        try {
+            $this->cookieJar->save($this->cookieFile);
+        } finally {
+            umask($previousUmask);
+        }
+
         $this->secureCookieFilePermissions();
     }
 

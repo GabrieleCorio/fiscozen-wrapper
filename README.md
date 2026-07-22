@@ -159,19 +159,40 @@ if ($page->next !== null) {
 Pagination parameters must be greater than or equal to `1`. Unknown filters are deliberately
 not accepted.
 
-### Local read-only JSON command
+### Local read-only scripts
 
-The local command prints JSON to standard output and never saves API responses automatically:
+Each script performs a single action and prints JSON to standard output; none of them save API
+responses automatically. Log in once with `login.php`, then run any read script against the
+session it created:
 
 ```bash
-php examples/read_data.php dashboard --year=2026
-php examples/read_data.php invoices --page=1 --page-size=20
-php examples/read_data.php counterparts
-php examples/read_data.php payment-methods --page=1 --page-size=20
+php examples/login.php
+php examples/read_dashboard.php --year=2026
+php examples/read_invoices.php --page=1 --page-size=20
+php examples/read_counterparts.php
+php examples/read_payment_methods.php --page=1 --page-size=20
+php examples/read_user_info.php
 ```
 
-Provide credentials through environment variables. To avoid placing their values in shell
-history, enter them interactively:
+The read scripts never trigger a login themselves — if no valid session is found they print an
+error asking you to run `login.php` first, keeping each script to one action.
+
+API responses can contain personal or fiscal data. Review terminal and process access before
+running these commands, and do not redirect output to a file unless that file is protected and
+excluded from version control.
+
+## Environment variables
+
+All scripts in `examples/` read their configuration from the environment instead of hardcoded
+values:
+
+| Variable | Required | Description |
+|----------|----------|--------------|
+| `FISCOZEN_EMAIL` | Yes | Account email used to log in |
+| `FISCOZEN_PASSWORD` | Yes | Account password used to log in |
+| `FISCOZEN_SESSION_DIR` | No | Directory for the session cookie file. Defaults to `examples/../sessions` |
+
+To avoid placing credentials in shell history, enter them interactively:
 
 ```bash
 read -r FISCOZEN_EMAIL
@@ -179,13 +200,7 @@ read -rs FISCOZEN_PASSWORD
 export FISCOZEN_EMAIL FISCOZEN_PASSWORD
 ```
 
-The first execution may request the OTP interactively. Session cookies are stored in the
-git-ignored `sessions/` directory by default. Set `FISCOZEN_SESSION_DIR` to use another private
-directory.
-
-API responses can contain personal or fiscal data. Review terminal and process access before
-running the command, and do not redirect output to a file unless that file is protected and
-excluded from version control.
+Session cookies are stored in the git-ignored `sessions/` directory by default.
 
 ### User profile
 
@@ -233,11 +248,18 @@ $client = new FiscozenClient(
 
 ## Full example
 
-See [examples/login_and_show_user.php](examples/login_and_show_user.php) for a complete script that:
+The `examples/` directory contains one script per action, each reading its configuration from
+the [environment variables](#environment-variables) described above:
 
-- checks whether a valid session already exists,
-- runs the two-step login flow with terminal OTP input as a fallback,
-- calls `getUserMe()` and prints the result.
+- [examples/login.php](examples/login.php) — checks whether a valid session already exists, and
+  otherwise runs the two-step login flow with terminal OTP input.
+- [examples/read_user_info.php](examples/read_user_info.php) — calls `getUserMe()` and prints the
+  result.
+- [examples/read_dashboard.php](examples/read_dashboard.php),
+  [examples/read_invoices.php](examples/read_invoices.php),
+  [examples/read_counterparts.php](examples/read_counterparts.php),
+  [examples/read_payment_methods.php](examples/read_payment_methods.php) — one script per
+  read-only domain endpoint.
 
 ## Running tests
 

@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/_bootstrap.php';
+
+use GabrieleCorio\FiscozenWrapper\Cli\ReadCommand;
+use GabrieleCorio\FiscozenWrapper\Exceptions\ApiException;
+
+const USAGE = "Uso: php examples/read_payment_methods.php [--page=N] [--page-size=N]\n";
+
+try {
+    $options = parseOptions(array_slice($argv, 1));
+    ReadCommand::validateRequest('payment-methods', $options);
+} catch (InvalidArgumentException $e) {
+    fwrite(STDERR, $e->getMessage() . "\n" . USAGE);
+    exit(2);
+}
+
+$client = fiscozenClientFromEnv();
+requireAuthenticatedSession($client);
+
+try {
+    $result = (new ReadCommand($client))->execute('payment-methods', $options);
+    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+} catch (ApiException $e) {
+    fwrite(STDERR, "Lettura non riuscita (HTTP {$e->getHttpStatusCode()}).\n");
+    exit(4);
+}
