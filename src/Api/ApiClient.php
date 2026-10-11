@@ -71,7 +71,7 @@ class ApiClient
     /** @return array<mixed> @throws ApiException */
     public function getFulfillmentForecast(int $fiscalYear): array
     {
-        return $this->get('/api/v1/fiscal_profile/fulfillment_forecast/', ['fiscal_year' => $fiscalYear]);
+        return $this->get('/api/v1/fiscal_profile/fulfillment_forecasts/', ['fiscal_year' => $fiscalYear]);
     }
 
     /** @return array<mixed> @throws ApiException */
