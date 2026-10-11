@@ -27,6 +27,10 @@ final class ReadCommand
                 page: self::positiveInt($options, 'page', 1),
                 pageSize: self::positiveInt($options, 'page-size', 20),
             )->toArray(),
+            'invoice' => $this->client->invoices()->findByNumber(
+                number: self::requiredPositiveInt($options, 'number', 'invoice'),
+                year: self::requiredYear($options, 'invoice'),
+            ),
             'counterparts' => $this->client->counterparts()->list(),
             'payment-methods' => $this->client->payments()->listMethods(
                 page: self::positiveInt($options, 'page', 1),
@@ -41,6 +45,7 @@ final class ReadCommand
     {
         $allowed = match ($command) {
             'dashboard' => ['year'],
+            'invoice' => ['number', 'year'],
             'invoices', 'payment-methods' => ['page', 'page-size'],
             'counterparts' => [],
             default => throw new \InvalidArgumentException("Comando non supportato: {$command}"),
@@ -53,6 +58,11 @@ final class ReadCommand
 
         if ($command === 'dashboard') {
             self::requiredYear($options);
+        }
+
+        if ($command === 'invoice') {
+            self::requiredPositiveInt($options, 'number', 'invoice');
+            self::requiredYear($options, 'invoice');
         }
 
         if (in_array($command, ['invoices', 'payment-methods'], true)) {
@@ -73,10 +83,10 @@ final class ReadCommand
     }
 
     /** @param array<string, string> $options */
-    private static function requiredYear(array $options): int
+    private static function requiredYear(array $options, string $command = 'dashboard'): int
     {
         if (!isset($options['year'])) {
-            throw new \InvalidArgumentException('Il comando dashboard richiede --year=YYYY');
+            throw new \InvalidArgumentException("Il comando {$command} richiede --year=YYYY");
         }
 
         $year = filter_var($options['year'], FILTER_VALIDATE_INT);
@@ -85,6 +95,16 @@ final class ReadCommand
         }
 
         return $year;
+    }
+
+    /** @param array<string, string> $options */
+    private static function requiredPositiveInt(array $options, string $name, string $command): int
+    {
+        if (!isset($options[$name])) {
+            throw new \InvalidArgumentException("Il comando {$command} richiede --{$name}=N");
+        }
+
+        return self::positiveInt($options, $name, 1);
     }
 
     /** @param array<string, string> $options */
