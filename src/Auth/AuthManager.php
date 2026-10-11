@@ -25,6 +25,7 @@ class AuthManager
         private readonly string $cookieFile,
         private readonly ?\Closure $httpClientFactory = null,
     ) {
+        $this->upgradeLegacyCookieFile();
         $this->cookieJar  = new FileCookieJar($this->cookieFile, storeSessionCookies: true);
         $this->secureCookieFilePermissions();
         $this->httpClient = $this->buildHttpClient();
@@ -310,6 +311,36 @@ class AuthManager
     {
         if (file_exists($this->cookieFile) && !chmod($this->cookieFile, 0600)) {
             throw new \RuntimeException('Impossibile proteggere il file di sessione');
+        }
+    }
+
+    /**
+     * Le versioni recenti di Guzzle rifiutano i file cookie senza la chiave
+     * "HostOnly" (scritti da versioni precedenti): la aggiunge dedotta dal dominio.
+     */
+    private function upgradeLegacyCookieFile(): void
+    {
+        if (!is_file($this->cookieFile)) {
+            return;
+        }
+
+        $data = json_decode((string) file_get_contents($this->cookieFile), true);
+        if (!is_array($data)) {
+            return;
+        }
+
+        $changed = false;
+        foreach ($data as &$cookie) {
+            if (is_array($cookie) && !array_key_exists('HostOnly', $cookie)) {
+                $domain = (string) ($cookie['Domain'] ?? '');
+                $cookie['HostOnly'] = $domain !== '' && $domain[0] !== '.';
+                $changed = true;
+            }
+        }
+        unset($cookie);
+
+        if ($changed) {
+            file_put_contents($this->cookieFile, json_encode($data), LOCK_EX);
         }
     }
 
