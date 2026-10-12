@@ -440,4 +440,20 @@ class AuthManagerTest extends TestCase
         $this->assertCount(1, $cookies);
         $this->assertSame('csrftoken', $cookies[0]->getName());
     }
+
+    public function testLegacyCookieUpgradeKeepsRestrictedPermissionsAndLeavesNoTemporaryFiles(): void
+    {
+        file_put_contents($this->cookieFile, json_encode([[
+            'Name' => 'sessionid', 'Value' => 'abc', 'Domain' => 'app.fiscozen.it',
+            'Path' => '/', 'Secure' => true, 'Discard' => false, 'HttpOnly' => true,
+        ]]));
+        chmod($this->cookieFile, 0644);
+
+        $this->makeManager([]);
+
+        self::assertSame(0600, fileperms($this->cookieFile) & 0777);
+        $stored = json_decode((string) file_get_contents($this->cookieFile), true);
+        self::assertTrue($stored[0]['HostOnly']);
+        self::assertSame([], glob($this->cookieFile . '.*') ?: []);
+    }
 }

@@ -340,7 +340,35 @@ class AuthManager
         unset($cookie);
 
         if ($changed) {
-            file_put_contents($this->cookieFile, json_encode($data), LOCK_EX);
+            $this->replaceCookieFile(json_encode($data, JSON_THROW_ON_ERROR));
+        }
+    }
+
+    /**
+     * Sostituisce il file di sessione in modo atomico: il contenuto viene scritto
+     * in un file temporaneo 0600 nella stessa directory e poi rinominato, così un
+     * errore a metà scrittura non lascia un file di sessione troncato.
+     */
+    private function replaceCookieFile(string $contents): void
+    {
+        $previousUmask = umask(0077);
+        try {
+            $temporaryFile = tempnam(dirname($this->cookieFile), basename($this->cookieFile) . '.');
+        } finally {
+            umask($previousUmask);
+        }
+
+        if ($temporaryFile === false) {
+            throw new \RuntimeException('Impossibile aggiornare il file di sessione');
+        }
+
+        if (
+            file_put_contents($temporaryFile, $contents, LOCK_EX) === false
+            || !chmod($temporaryFile, 0600)
+            || !rename($temporaryFile, $this->cookieFile)
+        ) {
+            @unlink($temporaryFile);
+            throw new \RuntimeException('Impossibile aggiornare il file di sessione');
         }
     }
 
