@@ -78,6 +78,47 @@ final class ReadCommandTest extends TestCase
         $this->makeCommand([])->execute('invoice', ['year' => '2026']);
     }
 
+    public function testInvoicesAcceptsCounterpartAndDateFilters(): void
+    {
+        $command = $this->makeCommand([$this->paginatedResponse([['id' => 12]])]);
+
+        $result = $command->execute('invoices', [
+            'counterpart' => '1239628',
+            'date-from' => '2026-06-01',
+            'date-to' => '2026-10-31',
+        ]);
+
+        self::assertSame(12, $result['results'][0]['id']);
+    }
+
+    public function testInvoicesAcceptsCounterpartSearch(): void
+    {
+        $command = $this->makeCommand([
+            $this->paginatedResponse([['counterpart' => 10]]),
+            $this->paginatedResponse([['id' => 77]]),
+        ]);
+
+        $result = $command->execute('invoices', ['counterpart-search' => 'Rossi']);
+
+        self::assertSame(77, $result['results'][0]['id']);
+    }
+
+    public function testInvoicesRejectsCounterpartWithCounterpartSearch(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('non sono combinabili');
+
+        $this->makeCommand([])->execute('invoices', ['counterpart' => '1', 'counterpart-search' => 'Rossi']);
+    }
+
+    public function testInvoicesRejectsInvalidDateWithoutHttpRequest(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('date-from');
+
+        $this->makeCommand([])->execute('invoices', ['date-from' => '01/06/2026']);
+    }
+
     public function testCounterpartsReturnsArray(): void
     {
         $command = $this->makeCommand([new Response(200, [], json_encode([['id' => 22]]))]);

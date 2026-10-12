@@ -26,6 +26,10 @@ final class ReadCommand
             'invoices' => $this->client->invoices()->list(
                 page: self::positiveInt($options, 'page', 1),
                 pageSize: self::positiveInt($options, 'page-size', 20),
+                counterpart: self::counterpartIds($options),
+                dateFrom: self::optionalDate($options, 'date-from'),
+                dateTo: self::optionalDate($options, 'date-to'),
+                counterpartSearch: $options['counterpart-search'] ?? null,
             )->toArray(),
             'invoice' => $this->client->invoices()->findByNumber(
                 number: self::requiredPositiveInt($options, 'number', 'invoice'),
@@ -46,7 +50,8 @@ final class ReadCommand
         $allowed = match ($command) {
             'dashboard' => ['year'],
             'invoice' => ['number', 'year'],
-            'invoices', 'payment-methods' => ['page', 'page-size'],
+            'invoices' => ['page', 'page-size', 'counterpart', 'counterpart-search', 'date-from', 'date-to'],
+            'payment-methods' => ['page', 'page-size'],
             'counterparts' => [],
             default => throw new \InvalidArgumentException("Comando non supportato: {$command}"),
         };
@@ -63,6 +68,23 @@ final class ReadCommand
         if ($command === 'invoice') {
             self::requiredPositiveInt($options, 'number', 'invoice');
             self::requiredYear($options, 'invoice');
+        }
+
+        if ($command === 'invoices') {
+            self::counterpartIds($options);
+            if (isset($options['counterpart-search'])) {
+                if (isset($options['counterpart'])) {
+                    throw new \InvalidArgumentException('counterpart e counterpart-search non sono combinabili');
+                }
+                if (trim($options['counterpart-search']) === '') {
+                    throw new \InvalidArgumentException('counterpart-search non può essere vuoto');
+                }
+            }
+            $from = self::optionalDate($options, 'date-from');
+            $to = self::optionalDate($options, 'date-to');
+            if ($from !== null && $to !== null && $from > $to) {
+                throw new \InvalidArgumentException('date-from non può essere successiva a date-to');
+            }
         }
 
         if (in_array($command, ['invoices', 'payment-methods'], true)) {
@@ -95,6 +117,43 @@ final class ReadCommand
         }
 
         return $year;
+    }
+
+    /**
+     * @param array<string, string> $options
+     * @return list<int>|null
+     */
+    private static function counterpartIds(array $options): ?array
+    {
+        if (!isset($options['counterpart'])) {
+            return null;
+        }
+
+        $ids = [];
+        foreach (explode(',', $options['counterpart']) as $part) {
+            $id = filter_var($part, FILTER_VALIDATE_INT);
+            if ($id === false || $id < 1) {
+                throw new \InvalidArgumentException('counterpart deve essere uno o più ID separati da virgola');
+            }
+            $ids[] = $id;
+        }
+
+        return $ids;
+    }
+
+    /** @param array<string, string> $options */
+    private static function optionalDate(array $options, string $name): ?\DateTimeImmutable
+    {
+        if (!isset($options[$name])) {
+            return null;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $options[$name]);
+        if ($date === false || $date->format('Y-m-d') !== $options[$name]) {
+            throw new \InvalidArgumentException("{$name} deve essere una data nel formato YYYY-MM-DD");
+        }
+
+        return $date;
     }
 
     /** @param array<string, string> $options */
