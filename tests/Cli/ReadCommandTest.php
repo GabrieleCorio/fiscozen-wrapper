@@ -58,6 +58,26 @@ final class ReadCommandTest extends TestCase
         self::assertSame(11, $result['results'][0]['id']);
     }
 
+    public function testInvoiceFindsDetailByNumberAndYear(): void
+    {
+        $command = $this->makeCommand([
+            $this->paginatedResponse([['id' => 44, 'full_id' => '7/2026']]),
+            new Response(200, [], json_encode(['id' => 44, 'full_id' => '7/2026'])),
+        ]);
+
+        $result = $command->execute('invoice', ['number' => '7', 'year' => '2026']);
+
+        self::assertSame(44, $result['id']);
+    }
+
+    public function testInvoiceRequiresNumberAndYear(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('--number=N');
+
+        $this->makeCommand([])->execute('invoice', ['year' => '2026']);
+    }
+
     public function testCounterpartsReturnsArray(): void
     {
         $command = $this->makeCommand([new Response(200, [], json_encode([['id' => 22]]))]);

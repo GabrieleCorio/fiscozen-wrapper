@@ -11,6 +11,7 @@ use GabrieleCorio\FiscozenWrapper\Api\Domain\InvoicesApi;
 use GabrieleCorio\FiscozenWrapper\Api\Domain\PaymentsApi;
 use GabrieleCorio\FiscozenWrapper\Auth\AuthManager;
 use GabrieleCorio\FiscozenWrapper\Exceptions\ApiException;
+use GabrieleCorio\FiscozenWrapper\Exceptions\InvoiceNotFoundException;
 use GabrieleCorio\FiscozenWrapper\FiscozenClient;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\FileCookieJar;
@@ -60,6 +61,84 @@ final class DomainApiTest extends TestCase
             'self_invoice' => 'false',
             'user' => '123',
         ], $query);
+    }
+
+    public function testInvoiceGetReadsDetailByInternalId(): void
+    {
+        [$client, $history] = $this->makeApiClient([
+            new Response(200, [], json_encode(['id' => 555, 'full_id' => '7/2026', 'amount' => '100.00'])),
+        ]);
+
+        $result = (new InvoicesApi($client))->get(555);
+
+        self::assertSame('7/2026', $result['full_id']);
+        self::assertSame('/api/v1/invoices/555/', $history->entries[0]['request']->getUri()->getPath());
+    }
+
+    public function testFindByNumberSearchesByFullIdAndFetchesDetail(): void
+    {
+        [$client, $history] = $this->makeApiClient([
+            // La ricerca parziale restituisce anche 17/2026: va ignorata.
+            $this->paginatedResponse([
+                ['id' => 900, 'full_id' => '17/2026'],
+                ['id' => 555, 'full_id' => '7/2026'],
+            ]),
+            new Response(200, [], json_encode(['id' => 555, 'full_id' => '7/2026', 'amount' => '100.00'])),
+        ]);
+
+        $result = (new InvoicesApi($client))->findByNumber(number: 7, year: 2026, user: 123);
+
+        self::assertSame(555, $result['id']);
+        self::assertSame('/api/v1/invoices/', $history->entries[0]['request']->getUri()->getPath());
+        parse_str($history->entries[0]['request']->getUri()->getQuery(), $query);
+        self::assertSame('7/2026', $query['search']);
+        self::assertSame('false', $query['self_invoice']);
+        self::assertSame('123', $query['user']);
+        self::assertSame('/api/v1/invoices/555/', $history->entries[1]['request']->getUri()->getPath());
+    }
+
+    public function testFindByNumberReadsFollowingPagesUntilMatch(): void
+    {
+        [$client, $history] = $this->makeApiClient([
+            new Response(200, [], json_encode([
+                'count' => 2, 'page' => 1, 'pages' => 2, 'next' => 'x', 'previous' => null,
+                'results' => [['id' => 1, 'full_id' => '17/2026']],
+            ])),
+            new Response(200, [], json_encode([
+                'count' => 2, 'page' => 2, 'pages' => 2, 'next' => null, 'previous' => 'x',
+                'results' => [['id' => 2, 'full_id' => '7/2026']],
+            ])),
+            new Response(200, [], json_encode(['id' => 2, 'full_id' => '7/2026'])),
+        ]);
+
+        $result = (new InvoicesApi($client))->findByNumber(7, 2026);
+
+        self::assertSame(2, $result['id']);
+        self::assertCount(3, $history->entries);
+    }
+
+    public function testFindByNumberThrowsWhenInvoiceDoesNotExist(): void
+    {
+        [$client, $history] = $this->makeApiClient([$this->paginatedResponse([])]);
+
+        try {
+            (new InvoicesApi($client))->findByNumber(7, 2026);
+            self::fail('InvoiceNotFoundException attesa');
+        } catch (InvoiceNotFoundException $e) {
+            self::assertSame('Invoice not found: 7/2026', $e->getMessage());
+            self::assertSame(404, $e->getHttpStatusCode());
+        }
+
+        self::assertCount(1, $history->entries);
+    }
+
+    public function testFindByNumberRejectsInvalidInputBeforeRequest(): void
+    {
+        [$client] = $this->makeApiClient([]);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new InvoicesApi($client))->findByNumber(0, 2026);
     }
 
     public function testInvoiceFormatInfoFormatsTypedParameters(): void

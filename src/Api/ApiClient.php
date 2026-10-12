@@ -44,6 +44,12 @@ class ApiClient
         return $this->get('/api/v1/invoices/', $query);
     }
 
+    /** @return array<mixed> @throws ApiException */
+    public function getInvoice(int $id): array
+    {
+        return $this->get("/api/v1/invoices/{$id}/");
+    }
+
     /** @param array<string, string|null> $query @return array<mixed> @throws ApiException */
     public function getInvoiceFormatInfo(array $query): array
     {

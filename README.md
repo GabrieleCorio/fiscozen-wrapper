@@ -84,6 +84,8 @@ CSRF handling provided by `AuthManager`.
 |--------|--------|---------|-------------|
 | User | `getUserMe()` | `array` | Authenticated user's profile data |
 | Invoices | `invoices()->list(...)` | `PaginatedResponse` | Paginated invoice list |
+| Invoices | `invoices()->get(...)` | `array` | Invoice details by internal Fiscozen ID |
+| Invoices | `invoices()->findByNumber(...)` | `array` | Invoice details by number and year |
 | Invoices | `invoices()->getFormatInfo(...)` | `array` | Invoice format information for a date |
 | Counterparts | `counterparts()->list(...)` | `array` | Counterpart list |
 | Payments | `payments()->listMethods(...)` | `PaginatedResponse` | Paginated payment method list |
@@ -107,10 +109,28 @@ foreach ($invoices->results as $invoice) {
     // Read the fields needed by your application.
 }
 
+// Invoice details by number and year (e.g. 24/2026), no internal ID needed.
+try {
+    $invoice = $client->invoices()->findByNumber(number: 24, year: 2026);
+    echo $invoice['full_id'], ' ', $invoice['amount'], ' ', $invoice['status'];
+    $rows = $invoice['data']['rows']; // description, quantity, amount, total, vat_code
+} catch (InvoiceNotFoundException $e) {
+    // "Invoice not found: 24/2026"
+}
+
+// Or by internal Fiscozen ID.
+$invoice = $client->invoices()->get(6512587);
+
 $formatInfo = $client->invoices()->getFormatInfo(
     new DateTimeImmutable('2026-01-15'),
 );
 ```
+
+`findByNumber()` searches the invoice list for `number/year` and keeps only an exact match
+before reading its details; it throws `InvoiceNotFoundException` (a subclass of `ApiException`
+with status `404`) when none exists. It looks at issued invoices by default; pass
+`selfInvoice: true` for self-invoices. The detail array is returned as-is and includes your own
+fiscal profile data; the wrapper never sends it to any third party.
 
 ### Counterparts
 
@@ -169,6 +189,7 @@ session it created:
 php examples/login.php
 php examples/read_dashboard.php --year=2026
 php examples/read_invoices.php --page=1 --page-size=20
+php examples/read_invoice.php --number=24 --year=2026
 php examples/read_counterparts.php
 php examples/read_payment_methods.php --page=1 --page-size=20
 php examples/read_user_info.php
@@ -257,6 +278,7 @@ the [environment variables](#environment-variables) described above:
   result.
 - [examples/read_dashboard.php](examples/read_dashboard.php),
   [examples/read_invoices.php](examples/read_invoices.php),
+  [examples/read_invoice.php](examples/read_invoice.php),
   [examples/read_counterparts.php](examples/read_counterparts.php),
   [examples/read_payment_methods.php](examples/read_payment_methods.php) — one script per
   read-only domain endpoint.
