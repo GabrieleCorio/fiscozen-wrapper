@@ -63,6 +63,147 @@ final class DomainApiTest extends TestCase
         ], $query);
     }
 
+    public function testInvoicesListFiltersByCounterpartAndDateRange(): void
+    {
+        [$client, $history] = $this->makeApiClient([$this->paginatedResponse([['id' => 101]])]);
+
+        (new InvoicesApi($client))->list(
+            page: 1,
+            pageSize: 50,
+            counterpart: [1239628, 42],
+            dateFrom: new \DateTimeImmutable('2026-06-01'),
+            dateTo: new \DateTimeImmutable('2026-10-31'),
+        );
+
+        parse_str($history->entries[0]['request']->getUri()->getQuery(), $query);
+        self::assertSame([
+            'page' => '1',
+            'page_size' => '50',
+            'ordering' => '-invoice_date,-invoice_number,-id',
+            'counterpart__in' => '1239628,42',
+            'date_from' => '2026-06-01',
+            'date_to' => '2026-10-31',
+        ], $query);
+    }
+
+    public function testInvoicesListReturnsEmptyResultWhenNothingMatches(): void
+    {
+        [$client] = $this->makeApiClient([new Response(200, [], json_encode([
+            'count' => 0, 'page' => 1, 'pages' => 0, 'next' => null, 'previous' => null, 'results' => [],
+        ]))]);
+
+        $result = (new InvoicesApi($client))->list(counterpart: 999);
+
+        self::assertSame(0, $result->count);
+        self::assertSame([], $result->results);
+    }
+
+    public function testInvoicesListRejectsInvertedDateRangeBeforeRequest(): void
+    {
+        [$client] = $this->makeApiClient([]);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new InvoicesApi($client))->list(
+            dateFrom: new \DateTimeImmutable('2026-10-31'),
+            dateTo: new \DateTimeImmutable('2026-06-01'),
+        );
+    }
+
+    public function testInvoicesListCanOmitDefaultOrdering(): void
+    {
+        [$client, $history] = $this->makeApiClient([$this->paginatedResponse([])]);
+
+        (new InvoicesApi($client))->list(ordering: null);
+
+        self::assertSame('', $history->entries[0]['request']->getUri()->getQuery());
+    }
+
+    public function testCounterpartsSearchUsesObservedQueryNames(): void
+    {
+        [$client, $history] = $this->makeApiClient([$this->paginatedResponse([['counterpart' => 1, 'counterpart_version' => 9]])]);
+
+        $result = (new CounterpartsApi($client))->search(' Anto ');
+
+        self::assertSame(1, $result->count);
+        self::assertSame('/api/v1/counterparts/', $history->entries[0]['request']->getUri()->getPath());
+        parse_str($history->entries[0]['request']->getUri()->getQuery(), $query);
+        self::assertSame(['choices' => 'null', 'counterpart_type' => 'CUSTOMER', 'search' => 'Anto'], $query);
+    }
+
+    public function testCounterpartsFindIdsUsesCounterpartFieldAcrossPages(): void
+    {
+        [$client] = $this->makeApiClient([
+            new Response(200, [], json_encode([
+                'count' => 3, 'page' => 1, 'pages' => 2, 'next' => 'x', 'previous' => null,
+                'results' => [
+                    ['counterpart' => 10, 'counterpart_version' => 100],
+                    ['counterpart' => 11, 'counterpart_version' => 110],
+                ],
+            ])),
+            new Response(200, [], json_encode([
+                'count' => 3, 'page' => 2, 'pages' => 2, 'next' => null, 'previous' => 'x',
+                'results' => [
+                    ['counterpart' => 11, 'counterpart_version' => 111],
+                    ['counterpart' => 12, 'counterpart_version' => 120],
+                ],
+            ])),
+        ]);
+
+        self::assertSame([10, 11, 12], (new CounterpartsApi($client))->findIds('Rossi'));
+    }
+
+    public function testCounterpartsSearchRejectsBlankTermBeforeRequest(): void
+    {
+        [$client] = $this->makeApiClient([]);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new CounterpartsApi($client))->search('   ');
+    }
+
+    public function testInvoicesListResolvesCounterpartSearchToIds(): void
+    {
+        [$client, $history] = $this->makeApiClient([
+            $this->paginatedResponse([['counterpart' => 10], ['counterpart' => 11]]),
+            $this->paginatedResponse([['id' => 501]]),
+        ]);
+
+        $result = (new InvoicesApi($client))->list(counterpartSearch: 'Rossi');
+
+        self::assertSame(501, $result->results[0]['id']);
+        self::assertSame('/api/v1/counterparts/', $history->entries[0]['request']->getUri()->getPath());
+        self::assertSame('/api/v1/invoices/', $history->entries[1]['request']->getUri()->getPath());
+        parse_str($history->entries[1]['request']->getUri()->getQuery(), $query);
+        self::assertSame('10,11', $query['counterpart__in']);
+        self::assertArrayNotHasKey('search', $query);
+    }
+
+    public function testInvoicesListReturnsEmptyWithoutInvoiceRequestWhenNoCounterpartMatches(): void
+    {
+        [$client, $history] = $this->makeApiClient([new Response(200, [], json_encode([
+            'count' => 0, 'page' => 1, 'pages' => 0, 'next' => null, 'previous' => null, 'results' => [],
+        ]))]);
+
+        $result = (new InvoicesApi($client))->list(counterpartSearch: 'Nessuno');
+
+        self::assertSame(0, $result->count);
+        self::assertSame([], $result->results);
+        self::assertCount(1, $history->entries);
+    }
+
+    public function testInvoicesListRejectsCounterpartAndCounterpartSearchTogether(): void
+    {
+        [$client, $history] = $this->makeApiClient([]);
+
+        try {
+            (new InvoicesApi($client))->list(counterpart: 1, counterpartSearch: 'Rossi');
+            self::fail('InvalidArgumentException attesa');
+        } catch (\InvalidArgumentException) {
+            self::assertCount(0, $history->entries);
+        }
+    }
+
     public function testInvoiceGetReadsDetailByInternalId(): void
     {
         [$client, $history] = $this->makeApiClient([

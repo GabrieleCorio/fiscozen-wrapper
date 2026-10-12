@@ -83,11 +83,13 @@ CSRF handling provided by `AuthManager`.
 | Domain | Method | Returns | Description |
 |--------|--------|---------|-------------|
 | User | `getUserMe()` | `array` | Authenticated user's profile data |
-| Invoices | `invoices()->list(...)` | `PaginatedResponse` | Paginated invoice list |
+| Invoices | `invoices()->list(...)` | `PaginatedResponse` | Paginated invoice list, filterable by customer and date range |
 | Invoices | `invoices()->get(...)` | `array` | Invoice details by internal Fiscozen ID |
 | Invoices | `invoices()->findByNumber(...)` | `array` | Invoice details by number and year |
 | Invoices | `invoices()->getFormatInfo(...)` | `array` | Invoice format information for a date |
 | Counterparts | `counterparts()->list(...)` | `array` | Counterpart list |
+| Counterparts | `counterparts()->search(...)` | `PaginatedResponse` | Customers matching a text search |
+| Counterparts | `counterparts()->findIds(...)` | `list<int>` | Counterpart IDs matching a text search |
 | Payments | `payments()->listMethods(...)` | `PaginatedResponse` | Paginated payment method list |
 | Dashboard | `dashboard()->getRealtimeYearStats(...)` | `array` | Real-time fiscal-year statistics |
 | Dashboard | `dashboard()->getFulfillmentForecast(...)` | `array` | Fiscal-year fulfillment forecast |
@@ -109,6 +111,18 @@ foreach ($invoices->results as $invoice) {
     // Read the fields needed by your application.
 }
 
+// Invoices issued to a customer in a period (most recent first by default).
+$issued = $client->invoices()->list(
+    counterpart: 1239628,
+    dateFrom: new DateTimeImmutable('2026-06-01'),
+    dateTo: new DateTimeImmutable('2026-10-31'),
+    pageSize: 50,
+);
+// No match returns count 0 and an empty `results`, not an error.
+
+// Or find the customer by name, surname or business name.
+$issued = $client->invoices()->list(counterpartSearch: 'Rossi');
+
 // Invoice details by number and year (e.g. 24/2026), no internal ID needed.
 try {
     $invoice = $client->invoices()->findByNumber(number: 24, year: 2026);
@@ -125,6 +139,16 @@ $formatInfo = $client->invoices()->getFormatInfo(
     new DateTimeImmutable('2026-01-15'),
 );
 ```
+
+Filters can be combined. `counterpart` takes a counterpart ID (or a list of IDs, sent as
+`counterpart__in`) and `dateFrom`/`dateTo` bound the invoice date inclusively. Results default to
+`-invoice_date,-invoice_number,-id`; pass `ordering: null` to leave ordering to the server. Use
+the `counterpart` filter, not `search`, to list the invoices of a customer.
+
+`counterpartSearch` looks customers up by first name, last name or business name and filters by
+every customer found (it cannot be combined with `counterpart`). Tax code and VAT number are
+**not** searchable: the counterparts endpoint does not match them. If no customer matches, the
+result is empty and the invoice list is not requested.
 
 `findByNumber()` searches the invoice list for `number/year` and keeps only an exact match
 before reading its details; it throws `InvoiceNotFoundException` (a subclass of `ApiException`
@@ -189,6 +213,8 @@ session it created:
 php examples/login.php
 php examples/read_dashboard.php --year=2026
 php examples/read_invoices.php --page=1 --page-size=20
+php examples/read_invoices.php --counterpart=1239628 --date-from=2026-06-01 --date-to=2026-10-31
+php examples/read_invoices.php --counterpart-search=Rossi
 php examples/read_invoice.php --number=24 --year=2026
 php examples/read_counterparts.php
 php examples/read_payment_methods.php --page=1 --page-size=20

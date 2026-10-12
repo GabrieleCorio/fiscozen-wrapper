@@ -7,7 +7,7 @@ require __DIR__ . '/_bootstrap.php';
 use GabrieleCorio\FiscozenWrapper\Cli\ReadCommand;
 use GabrieleCorio\FiscozenWrapper\Exceptions\ApiException;
 
-const USAGE = "Uso: php examples/read_invoices.php [--page=N] [--page-size=N]\n";
+const USAGE = "Uso: php examples/read_invoices.php [--page=N] [--page-size=N] [--counterpart=ID[,ID...] | --counterpart-search=TESTO] [--date-from=YYYY-MM-DD] [--date-to=YYYY-MM-DD]\n";
 
 try {
     $options = parseOptions(array_slice($argv, 1));
