@@ -426,4 +426,34 @@ class AuthManagerTest extends TestCase
 
         self::assertTrue($otpCallbackCalled, 'Il callback OTP deve essere invocato nel flusso di reauthenticate');
     }
+
+    public function testLoadsLegacyCookieFileWithoutHostOnly(): void
+    {
+        file_put_contents($this->cookieFile, json_encode([[
+            'Name' => 'csrftoken', 'Value' => 'abc', 'Domain' => '.fiscozen.it',
+            'Path' => '/', 'Secure' => true, 'Discard' => false, 'HttpOnly' => false,
+        ]]));
+
+        $manager = $this->makeManager([]);
+
+        $cookies = iterator_to_array($manager->getCookieJar());
+        $this->assertCount(1, $cookies);
+        $this->assertSame('csrftoken', $cookies[0]->getName());
+    }
+
+    public function testLegacyCookieUpgradeKeepsRestrictedPermissionsAndLeavesNoTemporaryFiles(): void
+    {
+        file_put_contents($this->cookieFile, json_encode([[
+            'Name' => 'sessionid', 'Value' => 'abc', 'Domain' => 'app.fiscozen.it',
+            'Path' => '/', 'Secure' => true, 'Discard' => false, 'HttpOnly' => true,
+        ]]));
+        chmod($this->cookieFile, 0644);
+
+        $this->makeManager([]);
+
+        self::assertSame(0600, fileperms($this->cookieFile) & 0777);
+        $stored = json_decode((string) file_get_contents($this->cookieFile), true);
+        self::assertTrue($stored[0]['HostOnly']);
+        self::assertSame([], glob($this->cookieFile . '.*') ?: []);
+    }
 }

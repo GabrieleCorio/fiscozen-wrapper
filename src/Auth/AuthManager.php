@@ -25,6 +25,7 @@ class AuthManager
         private readonly string $cookieFile,
         private readonly ?\Closure $httpClientFactory = null,
     ) {
+        $this->upgradeLegacyCookieFile();
         $this->cookieJar  = new FileCookieJar($this->cookieFile, storeSessionCookies: true);
         $this->secureCookieFilePermissions();
         $this->httpClient = $this->buildHttpClient();
@@ -310,6 +311,64 @@ class AuthManager
     {
         if (file_exists($this->cookieFile) && !chmod($this->cookieFile, 0600)) {
             throw new \RuntimeException('Impossibile proteggere il file di sessione');
+        }
+    }
+
+    /**
+     * Le versioni recenti di Guzzle rifiutano i file cookie senza la chiave
+     * "HostOnly" (scritti da versioni precedenti): la aggiunge dedotta dal dominio.
+     */
+    private function upgradeLegacyCookieFile(): void
+    {
+        if (!is_file($this->cookieFile)) {
+            return;
+        }
+
+        $data = json_decode((string) file_get_contents($this->cookieFile), true);
+        if (!is_array($data)) {
+            return;
+        }
+
+        $changed = false;
+        foreach ($data as &$cookie) {
+            if (is_array($cookie) && !array_key_exists('HostOnly', $cookie)) {
+                $domain = (string) ($cookie['Domain'] ?? '');
+                $cookie['HostOnly'] = $domain !== '' && $domain[0] !== '.';
+                $changed = true;
+            }
+        }
+        unset($cookie);
+
+        if ($changed) {
+            $this->replaceCookieFile(json_encode($data, JSON_THROW_ON_ERROR));
+        }
+    }
+
+    /**
+     * Sostituisce il file di sessione in modo atomico: il contenuto viene scritto
+     * in un file temporaneo 0600 nella stessa directory e poi rinominato, così un
+     * errore a metà scrittura non lascia un file di sessione troncato.
+     */
+    private function replaceCookieFile(string $contents): void
+    {
+        $previousUmask = umask(0077);
+        try {
+            $temporaryFile = tempnam(dirname($this->cookieFile), basename($this->cookieFile) . '.');
+        } finally {
+            umask($previousUmask);
+        }
+
+        if ($temporaryFile === false) {
+            throw new \RuntimeException('Impossibile aggiornare il file di sessione');
+        }
+
+        if (
+            file_put_contents($temporaryFile, $contents, LOCK_EX) === false
+            || !chmod($temporaryFile, 0600)
+            || !rename($temporaryFile, $this->cookieFile)
+        ) {
+            @unlink($temporaryFile);
+            throw new \RuntimeException('Impossibile aggiornare il file di sessione');
         }
     }
 
