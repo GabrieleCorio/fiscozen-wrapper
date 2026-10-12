@@ -334,7 +334,7 @@ final class DomainApiTest extends TestCase
         self::assertSame(1, $dashboard->getTasks()[0]['id']);
 
         self::assertSame('/api/v1/fiscal_profile/realtime_year_stats/', $history->entries[0]['request']->getUri()->getPath());
-        self::assertSame('/api/v1/fiscal_profile/fulfillment_forecast/', $history->entries[1]['request']->getUri()->getPath());
+        self::assertSame('/api/v1/fiscal_profile/fulfillment_forecasts/', $history->entries[1]['request']->getUri()->getPath());
         self::assertSame('/customer-push/api/v1/dashboard-tasks/', $history->entries[2]['request']->getUri()->getPath());
     }
 
